@@ -40,12 +40,6 @@ def verify_hashed_api_key(client_key: str = Header(None)):
     combined = client_key + API_SECRET_SALT
     hashed = hashlib.sha256(combined.encode()).hexdigest()
 
-    # 🔍 Debug logs
-    print("🔍 Raw client key:", client_key)
-    print("🧂 Salt used:", API_SECRET_SALT)
-    print("🔐 Computed hash:", hashed)
-    print("✅ Allowed hashes:", API_HASHED_KEYS)
-
     if hashed not in API_HASHED_KEYS:
         print("❌ API key hash mismatch. Unauthorized access.")
         raise HTTPException(status_code=401, detail="Invalid API key")
