@@ -19,7 +19,7 @@ else:
     model = None
 
 # 🔐 API auth setup
-API_SECRET_SALT = os.getenv("SECRET_SALT")
+API_SECRET_SALT = os.getenv("SERVER_SALT")
 API_HASHED_KEYS = os.getenv("SERVER_KEY", "").split(",")
 
 # 📥 Input schema
