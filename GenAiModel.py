@@ -8,19 +8,17 @@ import time
 
 app = FastAPI()
 
-# Your Gemini API key from Render environment
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Make sure to set this in Render
+# Your Gemini API key (set in Render or .env)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Input model
 class ModerateInput(BaseModel):
     post: str
 
-# Root endpoint
 @app.get("/")
 def root():
     return {"status": "moderation server running"}
 
-# Moderation endpoint
 @app.post("/moderate")
 def moderate(data: ModerateInput):
     prompt = f"""
@@ -46,17 +44,27 @@ Label:
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": prompt}]}]}
         )
+
         res = response.json()
-        label = res["candidates"][0]["content"]["parts"][0]["text"].strip().lower()
-        return {"label": label}
+        print("🔍 Gemini response:", res)  # Debugging info
+
+        if "candidates" in res:
+            label = res["candidates"][0]["content"]["parts"][0]["text"].strip().lower()
+            return {"label": label}
+        else:
+            return JSONResponse(status_code=500, content={
+                "error": "Gemini response missing 'candidates'",
+                "response": res
+            })
+
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 🔁 Self-ping thread to keep Render app awake
+# 🔁 Self-ping thread to prevent Render from sleeping
 def self_ping():
     app_url = os.getenv("RENDER_EXTERNAL_URL")
     if not app_url:
-        print("Self-ping skipped: not running on Render")
+        print("Self-ping disabled: not running on Render")
         return
 
     while True:
@@ -65,8 +73,8 @@ def self_ping():
             print("🔁 Self-ping successful")
         except Exception as e:
             print("❌ Self-ping failed:", e)
-        time.sleep(600)  # Every 10 minutes
+        time.sleep(600)  # every 10 minutes
 
-# ✅ Start the background ping thread if running on Render
+# ✅ Start self-ping only on Render
 if os.getenv("RENDER_EXTERNAL_URL"):
     threading.Thread(target=self_ping, daemon=True).start()
