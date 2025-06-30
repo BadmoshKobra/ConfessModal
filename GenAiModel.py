@@ -1,36 +1,53 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import os
 import threading
 import time
 import requests
+import hashlib
 import google.generativeai as genai
 
 app = FastAPI()
 
-# Your Gemini API key (set this in Render env vars or locally via .env)
+# 🔐 Load Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# ✅ Configure Gemini SDK
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")  # or "gemini-pro" or "gemini-1.5-pro"
+    model = genai.GenerativeModel("gemini-1.5-flash")
 else:
     model = None
+
+# 🔐 Hash-based API key validation setup
+API_SECRET_SALT = os.getenv("SECRET_SALT")
+
+# List of pre-hashed allowed keys
+API_HASHED_KEYS = os.getenv("SERVER_KEY", "").split(",")
 
 # Input schema
 class ModerateInput(BaseModel):
     post: str
+
+# 🔐 Secure API key validator
+def verify_hashed_api_key(client_key: str = Header(None)):
+    if not client_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    hashed = hashlib.sha256((client_key + API_SECRET_SALT).encode()).hexdigest()
+
+    if hashed not in API_HASHED_KEYS:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 @app.get("/")
 def root():
     return {"status": "moderation server running"}
 
 @app.post("/moderate")
-def moderate(data: ModerateInput):
+def moderate(data: ModerateInput, client_api_key: str = Header(None)):
+    verify_hashed_api_key(client_api_key)
+
     if not model:
-        return JSONResponse(status_code=500, content={"error": "Gemini API not configured"})
+        return JSONResponse(status_code=500, content={"error": "Gemini not configured"})
 
     prompt = f"""
 You are a moderation assistant for a social media app used by Indian users in English and Hinglish.
@@ -56,11 +73,11 @@ Label:
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 🔁 Self-ping thread to prevent Render from sleeping
+# 🔁 Self-ping thread for Render
 def self_ping():
     app_url = os.getenv("RENDER_EXTERNAL_URL")
     if not app_url:
-        print("Self-ping disabled: not running on Render")
+        print("Self-ping disabled (not on Render)")
         return
 
     while True:
@@ -69,8 +86,7 @@ def self_ping():
             print("🔁 Self-ping successful")
         except Exception as e:
             print("❌ Self-ping failed:", e)
-        time.sleep(600)  # every 10 minutes
+        time.sleep(600)
 
-# ✅ Start self-ping only on Render
 if os.getenv("RENDER_EXTERNAL_URL"):
     threading.Thread(target=self_ping, daemon=True).start()
