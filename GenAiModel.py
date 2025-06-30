@@ -18,30 +18,46 @@ if GEMINI_API_KEY:
 else:
     model = None
 
-# 🔐 Hash-based API key validation setup
+# 🔐 API auth setup
 API_SECRET_SALT = os.getenv("SECRET_SALT")
-
-# List of pre-hashed allowed keys
 API_HASHED_KEYS = os.getenv("SERVER_KEY", "").split(",")
 
-# Input schema
+# 📥 Input schema
 class ModerateInput(BaseModel):
     post: str
 
-# 🔐 Secure API key validator
+# 🔐 Debug-enhanced API key validator
 def verify_hashed_api_key(client_key: str = Header(None)):
     if not client_key:
+        print("❌ No client-api-key received in headers.")
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    hashed = hashlib.sha256((client_key + API_SECRET_SALT).encode()).hexdigest()
+    if not API_SECRET_SALT:
+        print("❌ API_SECRET_SALT is missing")
+        raise HTTPException(status_code=500, detail="Server misconfigured: missing salt")
+
+    # Compute hash
+    combined = client_key + API_SECRET_SALT
+    hashed = hashlib.sha256(combined.encode()).hexdigest()
+
+    # 🔍 Debug logs
+    print("🔍 Raw client key:", client_key)
+    print("🧂 Salt used:", API_SECRET_SALT)
+    print("🔐 Computed hash:", hashed)
+    print("✅ Allowed hashes:", API_HASHED_KEYS)
 
     if hashed not in API_HASHED_KEYS:
+        print("❌ API key hash mismatch. Unauthorized access.")
         raise HTTPException(status_code=401, detail="Invalid API key")
+    else:
+        print("✅ API key validated successfully.")
 
+# 🌐 Root check
 @app.get("/")
 def root():
     return {"status": "moderation server running"}
 
+# 🧠 Main moderation route
 @app.post("/moderate")
 def moderate(data: ModerateInput, client_api_key: str = Header(None)):
     verify_hashed_api_key(client_api_key)
@@ -73,11 +89,11 @@ Label:
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 🔁 Self-ping thread for Render
+# 🔁 Keep-alive thread for Render
 def self_ping():
     app_url = os.getenv("RENDER_EXTERNAL_URL")
     if not app_url:
-        print("Self-ping disabled (not on Render)")
+        print("⚠️ Self-ping disabled (RENDER_EXTERNAL_URL not set)")
         return
 
     while True:
@@ -88,5 +104,6 @@ def self_ping():
             print("❌ Self-ping failed:", e)
         time.sleep(600)
 
+# 🧵 Start self-ping thread only on Render
 if os.getenv("RENDER_EXTERNAL_URL"):
     threading.Thread(target=self_ping, daemon=True).start()
