@@ -2,16 +2,23 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import os
-import requests
 import threading
 import time
+import google.generativeai as genai
 
 app = FastAPI()
 
-# Your Gemini API key (set in Render or .env)
+# Your Gemini API key (set this in Render env vars or locally via .env)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Input model
+# ✅ Configure Gemini SDK
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-1.5-flash")  # or "gemini-pro" or "gemini-1.5-pro"
+else:
+    model = None
+
+# Input schema
 class ModerateInput(BaseModel):
     post: str
 
@@ -21,6 +28,9 @@ def root():
 
 @app.post("/moderate")
 def moderate(data: ModerateInput):
+    if not model:
+        return JSONResponse(status_code=500, content={"error": "Gemini API not configured"})
+
     prompt = f"""
 You are a moderation assistant for a social media app used by Indian users in English and Hinglish.
 
@@ -39,24 +49,9 @@ Label:
     """
 
     try:
-        response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]}
-        )
-
-        res = response.json()
-        print("🔍 Gemini response:", res)  # Debugging info
-
-        if "candidates" in res:
-            label = res["candidates"][0]["content"]["parts"][0]["text"].strip().lower()
-            return {"label": label}
-        else:
-            return JSONResponse(status_code=500, content={
-                "error": "Gemini response missing 'candidates'",
-                "response": res
-            })
-
+        response = model.generate_content(prompt)
+        label = response.text.strip().lower()
+        return {"label": label}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
