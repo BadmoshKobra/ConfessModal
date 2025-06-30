@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import os
 import threading
 import time
+import requests
 import google.generativeai as genai
 
 app = FastAPI()
