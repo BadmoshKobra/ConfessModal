@@ -3,19 +3,24 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 import os
 import requests
+import threading
+import time
 
 app = FastAPI()
 
-# Use Gemini or any hosted API key
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Add this in your .env or Render env vars
+# Your Gemini API key from Render environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # Make sure to set this in Render
 
+# Input model
 class ModerateInput(BaseModel):
     post: str
 
+# Root endpoint
 @app.get("/")
 def root():
     return {"status": "moderation server running"}
 
+# Moderation endpoint
 @app.post("/moderate")
 def moderate(data: ModerateInput):
     prompt = f"""
@@ -46,3 +51,22 @@ Label:
         return {"label": label}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+# 🔁 Self-ping thread to keep Render app awake
+def self_ping():
+    app_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not app_url:
+        print("Self-ping skipped: not running on Render")
+        return
+
+    while True:
+        try:
+            requests.get(f"{app_url}/")
+            print("🔁 Self-ping successful")
+        except Exception as e:
+            print("❌ Self-ping failed:", e)
+        time.sleep(600)  # Every 10 minutes
+
+# ✅ Start the background ping thread if running on Render
+if os.getenv("RENDER_EXTERNAL_URL"):
+    threading.Thread(target=self_ping, daemon=True).start()
