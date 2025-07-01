@@ -58,22 +58,28 @@ def moderate(data: ModerateInput, client_api_key: str = Header(None)):
 
     if not model:
         return JSONResponse(status_code=500, content={"error": "Gemini not configured"})
-
+        
     prompt = f"""
-You are a moderation assistant for a social media app used by Indian users in English and Hinglish.
+    You are a content moderation assistant for a social media app used by Indian users in English and Hinglish.
 
-Classify the following post into ONLY ONE of these categories:
+    Classify the following post into ONLY ONE of these categories:
+    [safe, religious_hate, sexual_threat, national_offense]
 
-[safe, religious_hate, sexual_threat, national_offense]
+    Classify strictly based on the intention and context of the message, not just words used.
 
-Guidelines:
-- Abuse, slang, and emotional expressions like depression, anxiety, or self-hate are allowed → classify as safe
-- Religious hate or targeting of any religion is not allowed → classify as religious_hate
-- National hate, anti-country sentiment, terrorism, or attack on any nation's dignity is not allowed → classify as national_offense
-- Any sexual threat, abuse, harassment, or assault-related content is not allowed → classify as sexual_threat
+    Moderation Rules:
 
-Example Post: "{data.post}"
-Label:
+    - Vulgar words, slang, personal insults, and anger/rage are acceptable if they are expressions of frustration or aggression (not actual threats) → classify as **safe**
+    - Posts targeting or promoting hate against any religion → classify as **religious_hate**
+    - Posts promoting anti-national sentiment, terrorism, or insulting a country → classify as **national_offense**
+    - Posts involving **serious or intentional** sexual harassment, threats, blackmail, or predatory behavior → classify as **sexual_threat**
+
+    The following post is written in Hinglish or informal tone:
+
+    Post: "{data.post}"
+
+    Now return the category label only (no explanation):
+    Label:
     """
 
     try:
