@@ -79,7 +79,10 @@ Label:
     try:
         response = model.generate_content(prompt)
         label = response.text.strip().lower()
-        return {"label": label}
+        return JSONResponse(
+            status_code=200,
+            content={"label": label}
+            )
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
