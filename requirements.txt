@@ -3,3 +3,4 @@ uvicorn
 requests
 pydantic
 google-generativeai
+psutil==5.9.8
